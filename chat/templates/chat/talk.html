@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <form method="post">
+        {% csrf_token %}
+        <input type="text" name="message" placeholder="Talk to me">
+        <button type="submit">Send</button>
+    </form>
+</body>
+
+</html>
