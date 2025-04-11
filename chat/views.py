@@ -12,6 +12,7 @@ from .models import User, UserProfile
 from .serializers import UserSerializer, UserProfileSerializer, UserProfileCreateSerializer
 from openai import OpenAI, OpenAIError, APIConnectionError, RateLimitError
 import requests
+from . import config
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -68,10 +69,16 @@ def talk_api(request):
     if "help" in message.lower():
         return JsonResponse({"reply": "Uh oh. How can I help?", "user": serializer.data, "message": "What can I do?", })
 
+    if message.lower() == 'hey':
+        print("What is up?")
+        return JsonResponse({"reply": "What's up?"})
+
     # AI Response
     # Get from openai.com
     try:
-        client = OpenAI(api_key="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")
+        # client = OpenAI(openai_api_key)
+        client = OpenAI(
+            api_key=config.openai_api_key)
         if city is not None:
             prompt = f"Act as a friendly companion for an elderly person who lives in '{city}'. They said: '{message}'. Respond with dark humor."
             print(prompt)
@@ -122,7 +129,7 @@ def talk(request):
             user_name="BigMike", defaults={"first_name": "Test", "last_name": "User"}
         )
         # weather support
-        weather_api_key = "91e174a545a3ab9fd6b6a7aa7b8785b1"
+        weather_api_key = config.weather_api_key
         try:
             weather = requests.get(
                 f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={weather_api_key}&units=imperial"
@@ -137,7 +144,7 @@ def talk(request):
         # Get from openai.com
         try:
             client = OpenAI(
-                api_key="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")
+                api_key=config.openai_api_key)
             prompt = f"Act as a friendly companion for an elderly person. They said: '{message}'. It’s {temp}°F outside. Respond warmly and naturally."
             ai_response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -176,6 +183,3 @@ def talk(request):
         return render(request, "chat/talk.html", context)
 
     return render(request, "chat/talk.html")
-
-
-# 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
