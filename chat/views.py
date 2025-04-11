@@ -70,8 +70,7 @@ def talk_api(request):
         return JsonResponse({"reply": "Uh oh. How can I help?", "user": serializer.data, "message": "What can I do?", })
 
     if message.lower() == 'hey':
-        print("What is up?")
-        return JsonResponse({"reply": "What's up?"})
+        return JsonResponse({"reply": "Hey! What's up?"})
 
     # AI Response
     # Get from openai.com
