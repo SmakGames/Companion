@@ -1,0 +1,6 @@
+*.pyc
+*.pyc
+/chat/__pycache__
+/chat/__pycache__
+/chat/config.py
+config.py
