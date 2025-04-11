@@ -1,12 +1,35 @@
 <!DOCTYPE html>
 <html>
+<script>
+    // When the page loads, ask for geolocation
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function (position) {
+            // Fill in hidden fields with the coordinates
+            document.getElementById('lat-field').value = position.coords.latitude;
+            document.getElementById('lon-field').value = position.coords.longitude;
+        }, function (error) {
+            console.warn("Geolocation failed:", error.message);
+        });
+    } else {
+        console.warn("Geolocation is not supported by this browser.");
+    }
+</script>
 
 <body>
     <form method="post">
         {% csrf_token %}
         <input type="text" name="message" placeholder="Talk to me">
         <button type="submit">Send</button>
+        <input type="hidden" id="lat-field" name="my_lat" value="0.0">
+        <input type="hidden" id="lon-field" name="my_lon" value="0.0">
     </form>
+    {% if reply %}
+    <div class="chat-response">
+        <p><strong>You:</strong> ({{ user.first_name }}) {{ message }}</p>
+        <p><strong>Companion:</strong> {{ reply }}</p>
+        <p><em>(It's {{ temp }}°F in {{ city }})</em></p>
+    </div>
+    {% endif %}
 </body>
 
 </html>
