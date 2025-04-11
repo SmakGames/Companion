@@ -7,7 +7,7 @@ router = DefaultRouter()
 router.register(r'users', UserViewSet)
 router.register(r'user-profiles', UserProfileViewSet)
 
-# URL patterns
+# URL patterns for the api and web
 urlpatterns = [
     path("talk/", talk, name="talk"),
     path('', talk, name='talk'),  # Root for HTML chat

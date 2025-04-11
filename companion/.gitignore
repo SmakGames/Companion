@@ -4,3 +4,5 @@
 /chat/__pycache__
 /chat/config.py
 config.py
+__pycache__/
+db.sqlite3

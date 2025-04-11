@@ -18,7 +18,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 
 class UserProfileCreateSerializer(serializers.ModelSerializer):
-    """ Serializer for creating/updating user profiles """
+    """ Serializer for creating/updating user profiles for the project"""
 
     class Meta:
         model = UserProfile
