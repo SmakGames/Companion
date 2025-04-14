@@ -38,18 +38,73 @@ class UserProfileViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['POST'])
+@api_view(['GET'])
+@csrf_exempt
+@never_cache
+def weather_api(request):
+    try:
+        # Use query parameters for GET
+        lat = request.query_params.get("lat")
+        lon = request.query_params.get("lon")
+        units = request.query_params.get(
+            "units", "imperial")  # Default to imperial
+
+        # Validate lat and lon
+        if not lat or not lon:
+            return Response(
+                {"error": "Latitude and longitude are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "Invalid latitude or longitude format"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Weather API call
+        weather_api_key = config.weather_api_key
+        try:
+            weather = requests.get(
+                f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={weather_api_key}&units={units}"
+            ).json()
+
+            if weather.get("cod") != 200:
+                print("COD line")
+                return Response(
+                    {"error": f"Weather API error: {weather.get('message', 'Unknown')}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            temp = int(weather["main"]["temp"])
+            print(f"The temp is {temp} degrees")
+            city = weather["name"]
+        except (requests.RequestException, KeyError, ValueError) as e:
+            return Response(
+                {"error": f"Failed to fetch weather: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        return Response({
+            "temperature": temp,
+            "city": city,
+            "units": units
+        }, status=status.HTTP_200_OK)
+
+    except (TypeError, ValueError, KeyError) as e:
+        return Response(
+            {"error": f"Invalid request: {str(e)}"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+@api_view(['POST', 'GET'])
 @csrf_exempt
 @never_cache
 def talk_api(request):
-    '''
-    If you're integrating with a mobile app or external system, you'd use talk_api.
-
-    @api_view(['POST']): This is a DRF (Django Rest Framework) decorator 
-    indicating that the view only accepts POST requests.
-
-    @csrf_exempt: Disables CSRF protection (common in API endpoints).
-    '''
 
     # Safely extract message and location data
     message = request.data.get("message")
@@ -79,7 +134,7 @@ def talk_api(request):
         client = OpenAI(
             api_key=config.openai_api_key)
         if city is not None:
-            prompt = f"Act as a friendly companion for an elderly person who lives in '{city}'. They said: '{message}'. Respond with dark humor."
+            prompt = f"Act as an elderly female friend for an elderly person who lives in '{city}'. They said: '{message}'. Respond with brevity."
             print(prompt)
         else:
             prompt = f"Act as a therapist for an elderly person. They said: '{message}'. Respond warmly and naturally."
