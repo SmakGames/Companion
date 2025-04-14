@@ -12,6 +12,6 @@ urlpatterns = [
     path("talk/", talk, name="talk"),
     path('', talk, name='talk'),  # Root for HTML chat
     path('talk_api/', talk_api, name='talk_api'),  # REST endpoint
-    path('weather_api/', weather_api, name='weather_api'),  # REST endpoint
+    path('weather_api/', weather_api, name='weather_api'),  # RESTful endpoint
     path('api/', include(router.urls)),  # REST API routes
 ]
