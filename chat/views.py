@@ -1,15 +1,16 @@
 from django.shortcuts import render
-from django.http import HttpResponse
+# from django.http import HttpResponse
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import never_cache
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import api_view
-from .models import User, UserProfile
-from .serializers import UserSerializer, UserProfileSerializer, UserProfileCreateSerializer
+from rest_framework.decorators import api_view, permission_classes
+from .models import User, UserProfile, ChatHistory
+from .serializers import UserSerializer, UserProfileSerializer, UserProfileCreateSerializer, ChatHistorySerializer
 from openai import OpenAI, OpenAIError, APIConnectionError, RateLimitError
 import requests
 from . import config
@@ -18,12 +19,12 @@ from . import config
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
 
 class UserProfileViewSet(viewsets.ModelViewSet):
     queryset = UserProfile.objects.all()
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -38,6 +39,39 @@ class UserProfileViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class ChatHistoryViewSet(viewsets.ModelViewSet):
+    queryset = ChatHistory.objects.all()
+    serializer_class = ChatHistorySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return ChatHistory.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+@api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+def user_profile(request):
+    profile = request.user.profile
+    try:
+        return Response({
+            "username": request.user.username,
+            "preferred_name": profile.preferred_name or request.user.username,
+            "account_status": profile.account_status,
+            "city": profile.city or "",
+            "chat_history": [
+                {"message": chat.message, "is_user": chat.is_user_message,
+                    "time": chat.timestamp.isoformat()}
+                for chat in request.user.chat_history.all()[:10]
+            ]
+        })
+    except ObjectDoesNotExist:
+        return Response({"error": "User does not have a profile"})
+
+
+# @permission_classes([IsAuthenticated]) # not yet
 @api_view(['GET'])
 @csrf_exempt
 @never_cache
@@ -101,31 +135,59 @@ def weather_api(request):
         )
 
 
-@api_view(['POST', 'GET'])
-@csrf_exempt
-@never_cache
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def talk_api(request):
 
     # Safely extract message and location data
     message = request.data.get("message")
     city = request.data.get("city")
+    if not message:
+        Response({"error": "Message required"},
+                 status=status.HTTP_400_BAD_REQUEST)
     print(f"The city is {city}")
 
-    # look up the user
-    user, _ = User.objects.get_or_create(
-        user_name="TestUser", defaults={"first_name": "Test", "last_name": "User"}
-    )
-    user.last_chat = message
-    user.save()
+    # Use authenticated user
+    user = request.user
+
+    # Save user message to ChatHistory
+    try:
+        ChatHistory.objects.create(
+            user=user,
+            message=message,
+            is_user_message=True
+        )
+    except ValueError as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     # serialization
     serializer = UserSerializer(user)
 
+    # Special responses
     if "help" in message.lower():
-        return JsonResponse({"reply": "Uh oh. How can I help?", "user": serializer.data, "message": "What can I do?", })
+        response = "Uh oh. How can I help?"
+        ChatHistory.objects.create(
+            user=user,
+            message=response,
+            is_user_message=False
+        )
+        return Response({
+            "reply": response,
+            "message": "What can I do?",
+            "user": serializer.data
+        })
 
-    if message.lower() == 'hey':
-        return JsonResponse({"reply": "Hey! What's up?"})
+    if message.lower() == "hey":
+        response = "Hey! What's up?"
+        ChatHistory.objects.create(
+            user=user,
+            message=response,
+            is_user_message=False
+        )
+        return Response({
+            "reply": response,
+            "user": serializer.data
+        })
 
     # AI Response
     # Get from openai.com
@@ -149,21 +211,21 @@ def talk_api(request):
 
     except APIConnectionError as e:
         print("Connection error:", e)
-        return JsonResponse({"reply": "Sorry, I had trouble connecting!"}, status=503)
+        return Response({"reply": "Sorry, I had trouble connecting!"}, status=503)
 
     except RateLimitError as e:
         print("Rate limit reached:", e)
-        return JsonResponse({"reply": "Too many chats right now—try again soon!"}, status=429)
+        return Response({"reply": "Too many chats right now—try again soon!"}, status=429)
 
     except OpenAIError as e:
         print("General OpenAI error:", e)
-        return JsonResponse({"reply": "Something’s off with the AI!"}, status=500)
+        return Response({"reply": "Something’s off with the AI!"}, status=500)
 
     except Exception as e:
         print("Unexpected error:", e)
-        return JsonResponse({"reply": "Oops! Something unexpected happened."}, status=500)
+        return Response({"reply": "Oops! Something unexpected happened."}, status=500)
 
-    return JsonResponse({
+    return Response({
         "reply": ai_response,
         "user": serializer.data,
         "message": message,
@@ -179,10 +241,17 @@ def talk(request):
         message = request.POST.get("message", "").strip()
         lat = request.POST.get("my_lat").strip()
         lon = request.POST.get("my_lon").strip()
-        user, _ = User.objects.get_or_create(
-            user_name="BigMike", defaults={"first_name": "Test", "last_name": "User"}
-        )
+        user = request.user if request.user.is_authenticated else User.objects.get_or_create(
+            username="Guest", defaults={"first_name": "Guest", "last_name": "User"}
+        )[0]
+        # user, _ = User.objects.get_or_create(
+        #    username="BigMike", defaults={"first_name": "Test", "last_name": "User"}
+        # )
         # weather support
+        # Save user message
+        ChatHistory.objects.create(
+            user=user, message=message, is_user_message=True)
+
         weather_api_key = config.weather_api_key
         try:
             weather = requests.get(
@@ -204,6 +273,8 @@ def talk(request):
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}]
             ).choices[0].message.content
+            ChatHistory.objects.create(
+                user=user, message=ai_response, is_user_message=False)
         except APIConnectionError as e:
             print("Connection error:", e)
             ai_response = "Sorry, I had trouble connecting to the AI service."

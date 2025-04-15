@@ -1,17 +1,46 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, UserProfileViewSet, talk, talk_api, weather_api
+from .views import UserViewSet, UserProfileViewSet, ChatHistoryViewSet, talk, talk_api, weather_api, user_profile
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
+from rest_framework import permissions
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-# Router for REST ViewSets
+# Swagger setup
+schema_view = get_schema_view(
+    openapi.Info(
+        title="Companion API",
+        default_version='v1',
+        description="API for virtual companion app",
+    ),
+    public=True,
+    permission_classes=(permissions.AllowAny,),
+)
+
+# Router
 router = DefaultRouter()
-router.register(r'users', UserViewSet)
-router.register(r'user-profiles', UserProfileViewSet)
+router.register(r'users', UserViewSet, basename='user')
+router.register(r'profiles', UserProfileViewSet, basename='profile')
+router.register(r'chat-history', ChatHistoryViewSet, basename='chat-history')
 
-# URL patterns for the api and web
+# URLs
 urlpatterns = [
-    path("talk/", talk, name="talk"),
-    path('', talk, name='talk'),  # Root for HTML chat
-    path('talk_api/', talk_api, name='talk_api'),  # RESTful endpoint
-    path('weather_api/', weather_api, name='weather_api'),  # RESTful endpoint
-    path('api/', include(router.urls)),  # REST API routes
+    # Web chat
+    path('', talk, name='chat_root'),
+    path('chat/', talk, name='chat'),
+    # APIs
+    path('api/v1/talk/', talk_api, name='talk_api'),
+    path('api/v1/weather/', weather_api, name='weather_api'),
+    path('api/v1/user_profile/', user_profile, name='user_profile'),
+    path('api/v1/', include(router.urls)),
+    # JWT authentication
+    path('api/v1/auth/token/', TokenObtainPairView.as_view(),
+         name='token_obtain_pair'),
+    path('api/v1/auth/token/refresh/',
+         TokenRefreshView.as_view(), name='token_refresh'),
+    # Swagger
+    path('swagger/', schema_view.with_ui('swagger',
+         cache_timeout=0), name='schema-swagger-ui'),
+    path('redoc/', schema_view.with_ui('redoc',
+         cache_timeout=0), name='schema-redoc'),
 ]
