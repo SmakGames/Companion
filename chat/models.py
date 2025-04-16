@@ -43,7 +43,11 @@ class UserProfile(models.Model):
         help_text="Date when the subscription expires."
     )
     street_address = models.CharField(max_length=255, blank=True, null=True)
-    city = models.CharField(max_length=100, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True,
+                            null=True, default='Boston')
+    preferred_name = models.CharField(max_length=100)
+    security_answer_hash = models.CharField(
+        max_length=128, blank=True, null=True)  # New
     state = models.CharField(max_length=100, blank=True, null=True)
     zip_code = models.CharField(max_length=20, blank=True, null=True)
     phone_number = models.CharField(max_length=15, blank=True, null=True)

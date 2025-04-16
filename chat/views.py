@@ -1,16 +1,17 @@
 from django.shortcuts import render
-# from django.http import HttpResponse
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import never_cache
+from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.views import APIView
 from .models import User, UserProfile, ChatHistory
-from .serializers import UserSerializer, UserProfileSerializer, UserProfileCreateSerializer, ChatHistorySerializer
+from .serializers import UserSerializer, UserProfileSerializer, UserProfileCreateSerializer, ChatHistorySerializer, RegisterSerializer, PasswordChangeSerializer, PasswordResetSerializer
 from openai import OpenAI, OpenAIError, APIConnectionError, RateLimitError
 import requests
 from . import config
@@ -36,6 +37,44 @@ class UserProfileViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RegisterView(APIView):
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "User created"}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordResetView(APIView):
+    def post(self, request):
+        # Rate limiting (e.g., 5 attempts per hour per IP)
+        ip = request.META.get('REMOTE_ADDR')
+        cache_key = f"password_reset_{ip}"
+        attempts = cache.get(cache_key, 0)
+        if attempts >= 5:
+            return Response({"error": "Too many attempts. Try again later."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        serializer = PasswordResetSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            cache.set(cache_key, attempts + 1, timeout=3600)
+            return Response({"message": "Password reset successful."}, status=status.HTTP_200_OK)
+        cache.set(cache_key, attempts + 1, timeout=3600)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordChangeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = PasswordChangeSerializer(
+            data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

@@ -6,9 +6,9 @@ from .models import UserProfile, ChatHistory
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'preferred_name',
+    list_display = ['user', 'user__first_name', 'user__last_name', 'preferred_name', 'city', 'state',
                     'account_status', 'subscription_expiry']
-    search_fields = ['user__username', 'preferred_name']
+    search_fields = ['user__username', 'preferred_name', 'user__last_name']
 
 
 @admin.register(ChatHistory)

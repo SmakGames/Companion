@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, UserProfileViewSet, ChatHistoryViewSet, talk, talk_api, weather_api, user_profile
+from .views import UserViewSet, UserProfileViewSet, ChatHistoryViewSet, talk, talk_api, weather_api, user_profile, RegisterView, PasswordResetView, PasswordChangeView
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework import permissions
@@ -34,6 +34,11 @@ urlpatterns = [
     path('api/v1/user_profile/', user_profile, name='user_profile'),
     path('api/v1/', include(router.urls)),
     # JWT authentication
+    path('api/v1/auth/register/', RegisterView.as_view(), name='register'),  # New
+    path('api/v1/auth/password_reset/',
+         PasswordResetView.as_view(), name='password_reset'),
+    path('api/v1/auth/password_change/',
+         PasswordChangeView.as_view(), name='password_change'),
     path('api/v1/auth/token/', TokenObtainPairView.as_view(),
          name='token_obtain_pair'),
     path('api/v1/auth/token/refresh/',
