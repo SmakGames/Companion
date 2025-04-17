@@ -42,7 +42,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'drf_yasg',  # swagger support
-    'chat',
+    'chat.apps.ChatConfig',
 ]
 
 MIDDLEWARE = [
@@ -148,3 +148,10 @@ CORS_ALLOW_ALL_ORIGINS = True
 #    "http://localhost:57983",  # Your frontend origin
 #    "http://localhost:3000",   # (optional if you're using React, etc.)
 # ]
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}

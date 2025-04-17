@@ -24,7 +24,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
-        related_name="profile",
+        related_name="profile",  # put this back?
         # Removed primary_key=True
     )
     account_status = models.CharField(
