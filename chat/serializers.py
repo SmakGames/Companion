@@ -108,6 +108,28 @@ class PasswordChangeSerializer(serializers.Serializer):
         user.save()
 
 
+class SecurityAnswerSerializer(serializers.Serializer):
+    security_answer = serializers.CharField(write_only=True)
+
+    def validate_security_answer(self, value):
+        if not value.strip():
+            raise serializers.ValidationError(
+                "Security answer cannot be empty.")
+        return value
+
+    def save(self, request):
+        user = request.user
+        try:
+            # profile = user.userprofile
+            profile = user.profile  # if shit does not work, try this line instead
+            answer_hash = hashlib.sha256(
+                self.validated_data['security_answer'].lower().encode()).hexdigest()
+            profile.security_answer_hash = answer_hash
+            profile.save()
+        except UserProfile.DoesNotExist:
+            raise serializers.ValidationError("User profile not found.")
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)  # Nested User Data (Optional)
     # user = UserSerializer()  # Nested User Data (Optional)

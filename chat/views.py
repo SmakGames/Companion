@@ -11,7 +11,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
 from .models import User, UserProfile, ChatHistory
-from .serializers import UserSerializer, UserProfileSerializer, UserProfileCreateSerializer, ChatHistorySerializer, RegisterSerializer, PasswordChangeSerializer, PasswordResetSerializer
+from .serializers import UserSerializer, \
+    UserProfileSerializer, UserProfileCreateSerializer, \
+    ChatHistorySerializer, RegisterSerializer, PasswordChangeSerializer, \
+    PasswordResetSerializer, SecurityAnswerSerializer
 from openai import OpenAI, OpenAIError, APIConnectionError, RateLimitError
 import requests
 from . import config
@@ -75,6 +78,24 @@ class PasswordChangeView(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SecurityAnswerView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ip = request.META.get('REMOTE_ADDR')
+        cache_key = f"security_answer_{ip}"
+        attempts = cache.get(cache_key, 0)
+        if attempts >= 5:
+            return Response({"error": "Too many attempts. Try again later."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        serializer = SecurityAnswerSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(request)
+            cache.set(cache_key, attempts + 1, timeout=3600)
+            return Response({"message": "Security answer updated."}, status=status.HTTP_200_OK)
+        cache.set(cache_key, attempts + 1, timeout=3600)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
