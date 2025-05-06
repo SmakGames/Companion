@@ -1,3 +1,4 @@
+import json
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -18,6 +19,7 @@ from .serializers import UserSerializer, \
 from openai import OpenAI, OpenAIError, APIConnectionError, RateLimitError
 import requests
 from . import config
+from . import message_analyst as ma
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -195,16 +197,20 @@ def weather_api(request):
         )
 
 
+# def starts_with_question_word(message):
+#    question_words = ("what", "when", "where", "how",
+#                      "why", "who", "can", "do", "if")
+#    return message.lower().startswith(question_words)
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def talk_api(request):
-
     # Safely extract message and location data
     message = request.data.get("message")
     city = request.data.get("city")
     if not message:
-        Response({"error": "Message required"},
-                 status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Message required"}, status=status.HTTP_400_BAD_REQUEST)
     print(f"The city is {city}")
 
     # Use authenticated user
@@ -220,7 +226,7 @@ def talk_api(request):
     except ValueError as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    # serialization
+    # Serialization
     serializer = UserSerializer(user)
 
     # Special responses
@@ -249,25 +255,56 @@ def talk_api(request):
             "user": serializer.data
         })
 
+    # Determine response style
+    if ma.starts_with_question_word(message):
+        print("Message starts with a question word.")
+        how_to_respond = "brevity"
+    else:
+        print("Message is a statement")
+        how_to_respond = "gallows humor"
+
+    # Fetch recent chat history (last 5 exchanges)
+    recent_history = ChatHistory.objects.filter(
+        user=user).order_by('-timestamp')[:5]
+    # Reverse to chronological order for prompt
+    recent_history = reversed(recent_history)
+
+    # Construct OpenAI messages array
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                f"You are a friendly, empathetic roommate for an elderly person living in {city or 'an unspecified city'}. "
+                "Respond warmly, naturally, and with {how_to_respond}. Keep responses concise (1-2 sentences) and appropriate for seniors. "
+                "Use the conversation history to maintain context and refer to prior messages when relevant."
+            )
+        }
+    ]
+    # Add recent chat history
+    for chat in recent_history:
+        messages.append({
+            "role": "user" if chat.is_user_message else "assistant",
+            "content": chat.message
+        })
+    # Add current message
+    messages.append({"role": "user", "content": message})
+
     # AI Response
-    # Get from openai.com
     try:
-        # client = OpenAI(openai_api_key)
-        client = OpenAI(
-            api_key=config.openai_api_key)
-        if city is not None:
-            prompt = f"Act as an elderly female friend for an elderly person who lives in '{city}'. They said: '{message}'. Respond with brevity."
-            print(prompt)
-        else:
-            prompt = f"Act as a therapist for an elderly person. They said: '{message}'. Respond warmly and naturally."
-            print(prompt)
-        #
-        # This is the respone back from the AI
-        #
+        client = OpenAI(api_key=config.openai_api_key)
         ai_response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}]
+            messages=messages,
+            max_tokens=100,  # Limit response length
+            temperature=0.7  # Balanced creativity
         ).choices[0].message.content
+
+        # Save AI response to ChatHistory
+        ChatHistory.objects.create(
+            user=user,
+            message=ai_response,
+            is_user_message=False
+        )
 
     except APIConnectionError as e:
         print("Connection error:", e)
@@ -285,11 +322,24 @@ def talk_api(request):
         print("Unexpected error:", e)
         return Response({"reply": "Oops! Something unexpected happened."}, status=500)
 
-    return Response({
-        "reply": ai_response,
+    print(f"AI Response: {ai_response}")
+    print(f"Serializer Data: {serializer.data}")
+    print(f"Message: {message}")
+
+    # Improved question detection
+    is_question = ai_response.strip().endswith('?') or any(
+        word in ai_response.lower() for word in ['what', 'when', 'where', 'how', 'why', 'who', 'can', 'do', 'if']
+    )
+
+    # Prepare response data
+    response_data = {
+        "response": ai_response,
         "user": serializer.data,
         "message": message,
-    })
+        "is_question": is_question
+    }
+    print(f"Response JSON: {json.dumps(response_data)}")
+    return Response(response_data)
 
 
 @csrf_exempt
