@@ -1,3 +1,0 @@
-# add your api keys here
-weather_api_key = '91e174a545a3ab9fd6b6a7aa7b8785b1'
-openai_api_key = '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'
